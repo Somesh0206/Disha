@@ -24,6 +24,8 @@ import {
   Lock,
   PlusCircle,
   ChevronDown,
+  Sparkles,
+  Layers,
   Radio,
   FileText
 } from 'lucide-react';
@@ -66,15 +68,24 @@ export default function Navbar() {
     return () => clearInterval(interval);
   }, []);
 
-  // Close 'More' dropdown on click outside
+  // Close 'More' dropdown on click outside or escape key
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (moreDropdownRef.current && !moreDropdownRef.current.contains(e.target)) {
         setMoreDropdownOpen(false);
       }
     };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setMoreDropdownOpen(false);
+      }
+    };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   const primaryNavLinks = [
@@ -86,8 +97,18 @@ export default function Navbar() {
   ];
 
   const secondaryNavLinks = [
-    { href: '/chat', label: language === 'hi' ? 'सुरक्षित रिस्पॉन्डर चैट' : 'Secure Responder Chat', icon: Lock },
-    { href: '/resources', label: language === 'hi' ? 'आपदा एसओपी एवं गाइड' : 'SOPs & Emergency Guides', icon: BookOpen }
+    {
+      href: '/chat',
+      label: language === 'hi' ? 'सुरक्षित रिस्पॉन्डर चैट' : 'Secure Responder Chat',
+      desc: language === 'hi' ? 'एन्क्रिप्टेड ग्राउंड टीम मैसेजिंग' : 'Encrypted team messaging',
+      icon: Lock
+    },
+    {
+      href: '/resources',
+      label: language === 'hi' ? 'आपदा एसओपी एवं गाइड' : 'SOPs & Emergency Guides',
+      desc: language === 'hi' ? 'एनडीएमए/एसडीआरएफ प्रोटोकॉल' : 'NDMA/SDRF Protocols & Kits',
+      icon: BookOpen
+    }
   ];
 
   const roleLabel =
@@ -115,7 +136,7 @@ export default function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md transition-colors overflow-x-hidden">
+    <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md transition-colors">
       {/* Real-time Ticker / Status Bar */}
       <div className="bg-gradient-to-r from-red-600 via-amber-600 to-red-700 text-white text-[11px] py-1 px-3 sm:px-6 font-medium flex items-center justify-between shadow-inner">
         <div className="flex items-center space-x-2 truncate">
@@ -189,22 +210,32 @@ export default function Navbar() {
               );
             })}
 
-            {/* 'More' Dropdown for secondary features */}
-            <div className="relative" ref={moreDropdownRef}>
+            {/* Overlapping 'More' Dropdown for secondary modules */}
+            <div className="relative inline-block" ref={moreDropdownRef}>
               <button
                 type="button"
                 onClick={() => setMoreDropdownOpen(!moreDropdownOpen)}
-                className={`flex items-center space-x-1 px-2 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                  pathname === '/chat' || pathname === '/resources'
-                    ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
+                className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  moreDropdownOpen || pathname === '/chat' || pathname === '/resources'
+                    ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 shadow-sm'
                     : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-850'
                 }`}>
                 <span>{language === 'hi' ? 'अधिक' : 'More'}</span>
-                <ChevronDown className="w-3.5 h-3.5" />
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                    moreDropdownOpen ? 'rotate-180 text-red-500' : 'text-slate-400'
+                  }`}
+                />
               </button>
 
+              {/* Overlapping Floating Dropdown Menu */}
               {moreDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2 z-[9999] animate-in fade-in slide-in-from-top-2 duration-150 ring-1 ring-black/10">
+                  <div className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 px-3 py-1.5 tracking-wider border-b border-slate-100 dark:border-slate-800 mb-1 flex items-center justify-between">
+                    <span>{language === 'hi' ? 'अतिरिक्त मॉड्यूल' : 'Additional Tools'}</span>
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                  </div>
+
                   {secondaryNavLinks.map((item) => {
                     const Icon = item.icon;
                     const isActive = pathname === item.href;
@@ -213,13 +244,25 @@ export default function Navbar() {
                         key={item.href}
                         href={item.href}
                         onClick={() => setMoreDropdownOpen(false)}
-                        className={`flex items-center space-x-2 px-3 py-2 rounded-xl text-xs font-bold transition-colors ${
+                        className={`flex items-start space-x-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
                           isActive
-                            ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
+                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/90'
                         }`}>
-                        <Icon className="w-4 h-4 text-slate-400" />
-                        <span>{item.label}</span>
+                        <div
+                          className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${
+                            isActive
+                              ? 'bg-red-500/20 text-red-500'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                          }`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="leading-tight">{item.label}</span>
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal leading-tight mt-0.5">
+                            {item.desc}
+                          </span>
+                        </div>
                       </Link>
                     );
                   })}
