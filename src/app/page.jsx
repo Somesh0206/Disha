@@ -134,7 +134,7 @@ export default function HomePage() {
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <Link
                   href="/relocation"
-                  className="px-5 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-sm tracking-wide shadow-lg shadow-blue-600/30 flex items-center space-x-2 transition-all hover:scale-105 active:scale-95">
+                  className="px-5 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white font-black text-sm tracking-wide shadow-lg shadow-blue-600/30 flex items-center space-x-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-blue-500/40 hover:scale-[1.02] active:scale-95">
                   <Compass className="w-4 h-4 text-amber-300 animate-spin-slow" />
                   <span>{t('hero.btnEvacuate', 'Find My Safe Shelter Route')}</span>
                   <ArrowRight className="w-4 h-4" />
@@ -142,21 +142,21 @@ export default function HomePage() {
 
                 <Link
                   href="/red-zones"
-                  className="px-5 py-3.5 rounded-2xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-sm tracking-wide border border-slate-700/80 flex items-center space-x-2 transition-all hover:scale-105 active:scale-95 shadow-md">
+                  className="px-5 py-3.5 rounded-2xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-sm tracking-wide border border-slate-700/80 flex items-center space-x-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:scale-[1.02] active:scale-95 shadow-md">
                   <MapPin className="w-4 h-4 text-red-400" />
                   <span>{t('hero.btnRadar', 'Inspect 3D GIS Hazard Zones')}</span>
                 </Link>
 
                 <button
                   onClick={() => openSosModal('citizen')}
-                  className="px-4 py-3.5 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-black text-sm border border-red-500/30 flex items-center space-x-2 transition-all hover:scale-105 active:scale-95">
+                  className="px-4 py-3.5 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-black text-sm border border-red-500/30 flex items-center space-x-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-red-500/20 hover:scale-[1.02] active:scale-95 animate-glow-pulse">
                   <AlertTriangle className="w-4 h-4 text-red-500 animate-pulse" />
                   <span>{t('hero.btnSos', 'Trigger Immediate SOS')}</span>
                 </button>
 
                 <button
                   onClick={handleExportDataReport}
-                  className="px-4 py-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold border border-slate-200 dark:border-slate-700 flex items-center space-x-1.5 transition-colors shadow-sm"
+                  className="px-4 py-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold border border-slate-200 dark:border-slate-700 flex items-center space-x-1.5 transition-all duration-300 hover:-translate-y-1 shadow-sm"
                   title="Export Official PDF Usage & Operations Report (Admin / Staff Clearance)">
                   <Download className="w-4 h-4 text-red-500" />
                   <span>{language === 'hi' ? 'पीडीएफ रिपोर्ट निर्यात' : 'Export PDF Report'}</span>
@@ -258,13 +258,13 @@ export default function HomePage() {
       {/* High-Level KPIs */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="glass-panel p-5 rounded-3xl border-l-4 border-l-red-500 relative overflow-hidden shadow-md">
+          <div className="glass-panel card-interactive p-5 rounded-3xl border-l-4 border-l-red-500 relative overflow-hidden shadow-md">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 {t('stat.activeRedZones', 'Critical Red Zones')}
               </span>
               <div className="p-2.5 rounded-2xl bg-red-500/10 text-red-500">
-                <ShieldAlert className="w-5 h-5" />
+                <ShieldAlert className="w-5 h-5 animate-pulse" />
               </div>
             </div>
             <div className="text-3xl font-black text-slate-900 dark:text-white font-mono">
@@ -275,13 +275,13 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="glass-panel p-5 rounded-3xl border-l-4 border-l-amber-500 relative overflow-hidden shadow-md">
+          <div className="glass-panel card-interactive p-5 rounded-3xl border-l-4 border-l-amber-500 relative overflow-hidden shadow-md">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 {t('stat.monitoredHabitations', 'Critical Habitations')}
               </span>
               <div className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-500">
-                <AlertTriangle className="w-5 h-5" />
+                <AlertTriangle className="w-5 h-5 animate-bounce-subtle" />
               </div>
             </div>
             <div className="text-3xl font-black text-slate-900 dark:text-white font-mono">
@@ -292,7 +292,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="glass-panel p-5 rounded-3xl border-l-4 border-l-purple-500 relative overflow-hidden shadow-md">
+          <div className="glass-panel card-interactive p-5 rounded-3xl border-l-4 border-l-purple-500 relative overflow-hidden shadow-md">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 {t('stat.relocationUrgency', 'Population in Hazard Zones')}
@@ -309,7 +309,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="glass-panel p-5 rounded-3xl border-l-4 border-l-emerald-500 relative overflow-hidden shadow-md">
+          <div className="glass-panel card-interactive p-5 rounded-3xl border-l-4 border-l-emerald-500 relative overflow-hidden shadow-md">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 {t('stat.safeShelterCapacity', 'Available Safe Capacity')}
