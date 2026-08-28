@@ -498,42 +498,35 @@ export default function VoiceAssistant() {
 
   if (!isVoiceAssistantOpen) {
     return (
-      /* Floating Bottom-Right Dock: VAANI AI Voice Button + Encrypted Chat Button Stacked */
-      <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end space-y-3">
-        {/* VAANI AI Voice Trigger */}
-        <button
-          onClick={openVoiceAssistant}
-          className="group relative flex items-center space-x-2.5 px-4 py-3 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-700 hover:to-indigo-800 text-white rounded-full shadow-2xl shadow-purple-500/40 border border-purple-400/40 transition-all hover:scale-105 active:scale-95 animate-bounce-subtle"
-          title="Open DISHA AI Voice Assistant (VAANI)">
-          
-          <span className="relative flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-90"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
-          </span>
-          <Mic className="w-5 h-5 text-white animate-pulse" />
-          <div className="flex flex-col text-left">
-            <span className="font-black text-xs tracking-wider uppercase">
-              {language === 'hi' ? 'वाणी AI (VOICE)' : 'VAANI AI (VOICE)'}
-            </span>
-          </div>
-        </button>
-
-        {/* Encrypted 1-on-1 Chat Trigger (Hidden when already on /chat) */}
+      /* Sleek Floating Bottom-Right Quick Triggers */
+      <div className="fixed bottom-5 right-5 z-40 flex items-center space-x-2.5">
+        {/* Encrypted Chat Quick Icon (Hidden when already on /chat) */}
         {pathname !== '/chat' && (
           <Link
             href="/chat"
-            className="group relative flex items-center space-x-2.5 px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-full shadow-2xl shadow-emerald-500/40 border border-emerald-400/40 transition-all hover:scale-105 active:scale-95"
-            title="Open Encrypted 1-on-1 Disaster Support Chat">
-            
-            <Lock className="w-4 h-4 text-emerald-200" />
-            <span className="font-black text-xs tracking-wider uppercase">
-              {language === 'hi' ? 'सुरक्षित चैट' : 'SECURE CHAT'}
-            </span>
-            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping"></span>
+            className="group relative w-11 h-11 bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-full shadow-xl shadow-emerald-600/30 border border-emerald-400/40 flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+            title={language === 'hi' ? 'सुरक्षित चैट खोलें' : 'Open Encrypted Responder Chat'}>
+            <Lock className="w-4 h-4 text-white" />
+            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-slate-950 animate-ping"></span>
           </Link>
         )}
-      </div>);
 
+        {/* VAANI AI Voice Trigger Circular Button */}
+        <button
+          onClick={openVoiceAssistant}
+          className="group relative flex items-center space-x-2 px-3.5 py-2.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-700 hover:to-indigo-800 text-white rounded-full shadow-2xl shadow-purple-600/40 border border-purple-400/40 transition-all hover:scale-105 active:scale-95"
+          title="Open DISHA AI Voice Assistant (VAANI)">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-90"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+          </span>
+          <Mic className="w-4 h-4 text-white animate-pulse" />
+          <span className="font-bold text-xs tracking-wider">
+            {language === 'hi' ? 'वाणी AI' : 'Vaani AI'}
+          </span>
+        </button>
+      </div>
+    );
   }
 
   return (
