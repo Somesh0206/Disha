@@ -82,7 +82,7 @@ export default function Navbar() {
     { href: '/shelters', label: language === 'hi' ? 'सुरक्षित आश्रय' : 'Safe Havens', icon: Building2 },
     { href: '/relocation', label: language === 'hi' ? 'पुनर्वास' : 'Relocation', icon: Compass },
     { href: '/predictions', label: language === 'hi' ? 'पूर्वानुमान' : 'AI Risk', icon: SlidersHorizontal },
-    { href: '/admin', label: language === 'hi' ? 'कमांड' : 'Console', icon: ShieldAlert }
+    { href: '/admin', label: language === 'hi' ? 'SEOC कंसोल' : 'SEOC Console', icon: ShieldAlert }
   ];
 
   const secondaryNavLinks = [

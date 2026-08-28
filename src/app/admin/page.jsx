@@ -3,9 +3,6 @@
 import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { mockHabitations, mockHazardZones } from '@/data/zonesData';
-
-
-
 import MapWrapper from '@/components/MapWrapper';
 import PostgisQueryTester from '@/components/PostgisQueryTester';
 import {
@@ -28,13 +25,13 @@ import {
 
 export default function AdminPage() {
   const {
-    sosAlerts,
+    sosAlerts = [],
     updateSosStatus,
     dispatchRescueTeam,
     selectedSosForRoute,
     setSelectedSosForRoute,
     openSosModal,
-    shelters,
+    shelters = [],
     openAddShelterModal,
     currentUser,
     playSosBeep,
@@ -43,8 +40,8 @@ export default function AdminPage() {
     t
   } = useApp();
 
-  const [habitations, setHabitations] = useState(mockHabitations);
-  const [selectedZoneId, setSelectedZoneId] = useState(mockHazardZones[0].id);
+  const [habitations, setHabitations] = useState(mockHabitations || []);
+  const [selectedZoneId, setSelectedZoneId] = useState(mockHazardZones?.[0]?.id || 'ZONE-01');
 
   // Dispatch Dialog State
   const [activeDispatchSos, setActiveDispatchSos] = useState(null);
@@ -61,13 +58,13 @@ export default function AdminPage() {
   // Threshold adjustments
   const handleCapacityChange = (habId, delta) => {
     setHabitations((prev) =>
-    prev.map((h) => h.id === habId ? { ...h, population: Math.max(100, h.population + delta) } : h)
+      (prev || []).map((h) => (h.id === habId ? { ...h, population: Math.max(100, (h.population || 0) + delta) } : h))
     );
   };
 
   const handleSendBroadcast = (e) => {
     e.preventDefault();
-    playSosBeep();
+    if (playSosBeep) playSosBeep();
     setBroadcastSuccess(true);
     setTimeout(() => setBroadcastSuccess(false), 3000);
   };
@@ -75,16 +72,23 @@ export default function AdminPage() {
   const handleConfirmDispatch = async (e) => {
     e.preventDefault();
     if (!activeDispatchSos) return;
-    await dispatchRescueTeam(activeDispatchSos.id, selectedUnit, responderNotes);
+    if (dispatchRescueTeam) {
+      await dispatchRescueTeam(activeDispatchSos.id, selectedUnit, responderNotes);
+    }
     setActiveDispatchSos(null);
   };
 
   const handleMarkRescued = async (sosId) => {
-    await updateSosStatus(sosId, 'RESCUED');
-    triggerEvacuationCelebration();
+    if (updateSosStatus) {
+      await updateSosStatus(sosId, 'RESCUED');
+    }
+    if (triggerEvacuationCelebration) {
+      triggerEvacuationCelebration();
+    }
   };
 
-  const activeSos = selectedSosForRoute || sosAlerts[0];
+  const safeSosList = Array.isArray(sosAlerts) ? sosAlerts : [];
+  const activeSos = selectedSosForRoute || (safeSosList.length > 0 ? safeSosList[0] : null);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -99,9 +103,9 @@ export default function AdminPage() {
             {language === 'hi' ? 'राज्य आपातकालीन संचालन केंद्र (SEOC)' : 'State Emergency Operations Console (SEOC)'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-            {language === 'hi' ?
-            'नागरिक एसओएस (SOS) लाइव ट्राइएज, त्वरित बचाव दल प्रेषण और सड़क मार्ग नेविगेशन प्रणाली।' :
-            'Real-time citizen SOS triage, rapid rescue team dispatch, and turn-by-turn road route guidance.'}
+            {language === 'hi'
+              ? 'नागरिक एसओएस (SOS) लाइव ट्राइएज, त्वरित बचाव दल प्रेषण और सड़क मार्ग नेविगेशन प्रणाली।'
+              : 'Real-time citizen SOS triage, rapid rescue team dispatch, and turn-by-turn road route guidance.'}
           </p>
         </div>
 
@@ -114,7 +118,7 @@ export default function AdminPage() {
           </button>
 
           <button
-            onClick={() => openSosModal('responder')}
+            onClick={() => openSosModal && openSosModal('responder')}
             className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold flex items-center space-x-2 shadow transition-all hover:scale-105">
             <Radio className="w-4 h-4 animate-pulse" />
             <span>{language === 'hi' ? 'क्षेत्रीय आपदा प्रसारण' : 'Launch Regional Incident Dispatch'}</span>
@@ -131,7 +135,7 @@ export default function AdminPage() {
               <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
             </span>
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-              {language === 'hi' ? 'नागरिक एसओएस (SOS) संकट बीकन एवं लाइव बचाव प्रेषण' : 'Citizen SOS Distress Beacons & Live Rescue Dispatch'} ({sosAlerts.length})
+              {language === 'hi' ? 'नागरिक एसओएस (SOS) संकट बीकन एवं लाइव बचाव प्रेषण' : 'Citizen SOS Distress Beacons & Live Rescue Dispatch'} ({safeSosList.length})
             </h2>
           </div>
           <span className="text-xs text-slate-400 font-mono">
@@ -142,137 +146,140 @@ export default function AdminPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left 7 Cols: Citizen SOS Distress Queue */}
           <div className="lg:col-span-7 space-y-3">
-            {sosAlerts.map((alert) => {
-              const isSelected = activeSos?.id === alert.id;
-              return (
-                <div
-                  key={alert.id}
-                  className={`p-4 rounded-2xl border transition-all ${
-                  isSelected ?
-                  'border-2 border-red-500 bg-red-500/10 shadow-lg' :
-                  alert.status === 'PENDING' ?
-                  'bg-white dark:bg-slate-900/90 border-red-500/30' :
-                  alert.status === 'DISPATCHED' ?
-                  'bg-white dark:bg-slate-900/90 border-amber-500/30' :
-                  'bg-white dark:bg-slate-900/90 border-emerald-500/30'}`
-                  }>
-                  
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                        {alert.id}
-                      </span>
-                      <span className="font-bold text-sm text-slate-900 dark:text-white">{alert.senderName}</span>
-                      <span className="text-xs text-slate-400 font-mono">({alert.senderPhone})</span>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <span
-                        className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase ${
-                        alert.status === 'PENDING' ?
-                        'bg-red-600 text-white animate-pulse' :
-                        alert.status === 'DISPATCHED' ?
-                        'bg-amber-500 text-slate-950 font-bold' :
-                        'bg-emerald-600 text-white'}`
-                        }>
-                        
-                        {alert.status === 'PENDING' ?
-                        language === 'hi' ? '🚨 संकट लंबित' : '🚨 Distress Pending' :
-                        alert.status === 'DISPATCHED' ?
-                        language === 'hi' ? '⚡ दल रवाना' : '⚡ Unit En Route' :
-                        language === 'hi' ? '✓ सुरक्षित बचाया गया' : '✓ Rescued'}
-                      </span>
-                      <span className="text-[11px] text-slate-400 font-mono">{alert.timestamp}</span>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 text-xs text-slate-700 dark:text-slate-300 space-y-1">
-                    <div className="flex items-center space-x-1.5 font-medium">
-                      <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                      <span>{alert.addressDescription}</span>
-                    </div>
-                    {alert.notes &&
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-800/60 p-2 rounded-lg">
-                        “{alert.notes}”
-                      </div>
-                    }
-                  </div>
-
-                  {/* Dispatch Unit Info if assigned */}
-                  {alert.assignedUnit &&
-                  <div className="mt-2 text-xs bg-blue-500/10 border border-blue-500/30 text-blue-800 dark:text-blue-200 p-2 rounded-xl flex items-center justify-between">
+            {safeSosList.length === 0 ? (
+              <div className="p-8 text-center bg-white dark:bg-slate-900/90 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-500">
+                <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                <p className="font-bold text-sm">{language === 'hi' ? 'कोई सक्रिय संकट अलर्ट नहीं' : 'No Active Distress Alerts'}</p>
+                <p className="text-xs">{language === 'hi' ? 'सभी सेक्टर सामान्य स्थिति में हैं।' : 'All monitored habitations are reporting safe status.'}</p>
+              </div>
+            ) : (
+              safeSosList.map((alert) => {
+                const isSelected = activeSos?.id === alert.id;
+                return (
+                  <div
+                    key={alert.id}
+                    className={`p-4 rounded-2xl border transition-all ${
+                      isSelected
+                        ? 'border-2 border-red-500 bg-red-500/10 shadow-lg'
+                        : alert.status === 'PENDING'
+                        ? 'bg-white dark:bg-slate-900/90 border-red-500/30'
+                        : alert.status === 'DISPATCHED'
+                        ? 'bg-white dark:bg-slate-900/90 border-amber-500/30'
+                        : 'bg-white dark:bg-slate-900/90 border-emerald-500/30'
+                    }`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center space-x-2">
-                        <Truck className="w-4 h-4 text-blue-500 shrink-0" />
-                        <div>
-                          <strong>{alert.assignedUnit}</strong>
-                          <span className="text-[10px] text-slate-400 block">{alert.responderNotes}</span>
-                        </div>
-                      </div>
-                      <span className="text-xs font-mono font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded">
-                        {language === 'hi' ? 'आगमन समय:' : 'ETA:'} ~{alert.estimatedArrivalMins || 8} {language === 'hi' ? 'मिनट' : 'mins'}
-                      </span>
-                    </div>
-                  }
-
-                  {/* Operational Metrics & Action Bar */}
-                  <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center space-x-3 text-[11px] font-mono">
-                      <span>{language === 'hi' ? 'फंसे लोग:' : 'People:'} <strong className="text-slate-900 dark:text-white">{alert.peopleCount}</strong></span>
-                      {alert.medicalAssistanceRequired &&
-                      <span className="text-red-500 font-bold flex items-center space-x-1">
-                          <Ambulance className="w-3 h-3" />
-                          <span>{language === 'hi' ? 'चिकित्सा आपातकाल' : 'Medical Triage Req.'}</span>
+                        <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                          {alert.id}
                         </span>
-                      }
+                        <span className="font-bold text-sm text-slate-900 dark:text-white">{alert.senderName}</span>
+                        <span className="text-xs text-slate-400 font-mono">({alert.senderPhone})</span>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <span
+                          className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase ${
+                            alert.status === 'PENDING'
+                              ? 'bg-red-600 text-white animate-pulse'
+                              : alert.status === 'DISPATCHED'
+                              ? 'bg-amber-500 text-slate-950 font-bold'
+                              : 'bg-emerald-600 text-white'
+                          }`}>
+                          {alert.status === 'PENDING'
+                            ? language === 'hi' ? '🚨 संकट लंबित' : '🚨 Distress Pending'
+                            : alert.status === 'DISPATCHED'
+                            ? language === 'hi' ? '⚡ दल रवाना' : '⚡ Unit En Route'
+                            : language === 'hi' ? '✓ सुरक्षित बचाया गया' : '✓ Rescued'}
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-mono">{alert.timestamp}</span>
+                      </div>
                     </div>
 
-                    <div className="flex items-center space-x-1.5">
-                      {/* View Road Route Button */}
-                      <button
-                        onClick={() => setSelectedSosForRoute(alert)}
-                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1 transition-all ${
-                        isSelected ?
-                        'bg-blue-600 text-white shadow' :
-                        'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`
-                        }>
-                        
-                        <Navigation className="w-3.5 h-3.5" />
-                        <span>{language === 'hi' ? 'रास्ता देखें' : 'View Rescue Route'}</span>
-                      </button>
+                    <div className="mt-2 text-xs text-slate-700 dark:text-slate-300 space-y-1">
+                      <div className="flex items-center space-x-1.5 font-medium">
+                        <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                        <span>{alert.addressDescription}</span>
+                      </div>
+                      {alert.notes && (
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-800/60 p-2 rounded-lg">
+                          “{alert.notes}”
+                        </div>
+                      )}
+                    </div>
 
-                      {/* Dispatch Rescue Team Button */}
-                      {alert.status !== 'RESCUED' &&
-                      <button
-                        onClick={() => {
-                          setActiveDispatchSos(alert);
-                          setSelectedSosForRoute(alert);
-                        }}
-                        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs shadow flex items-center space-x-1 transition-all hover:scale-105">
-                        
-                          <Siren className="w-3.5 h-3.5" />
-                          <span>
-                            {alert.status === 'DISPATCHED' ?
-                          language === 'hi' ? 'यूनिट बदलें' : 'Re-assign Unit' :
-                          language === 'hi' ? 'राहत दल भेजें' : 'Respond & Dispatch'}
+                    {/* Dispatch Unit Info if assigned */}
+                    {alert.assignedUnit && (
+                      <div className="mt-2 text-xs bg-blue-500/10 border border-blue-500/30 text-blue-800 dark:text-blue-200 p-2 rounded-xl flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Truck className="w-4 h-4 text-blue-500 shrink-0" />
+                          <div>
+                            <strong>{alert.assignedUnit}</strong>
+                            <span className="text-[10px] text-slate-400 block">{alert.responderNotes}</span>
+                          </div>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded">
+                          {language === 'hi' ? 'आगमन समय:' : 'ETA:'} ~{alert.estimatedArrivalMins || 8} {language === 'hi' ? 'मिनट' : 'mins'}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Operational Metrics & Action Bar */}
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center space-x-3 text-[11px] font-mono">
+                        <span>{language === 'hi' ? 'फंसे लोग:' : 'People:'} <strong className="text-slate-900 dark:text-white">{alert.peopleCount}</strong></span>
+                        {alert.medicalAssistanceRequired && (
+                          <span className="text-red-500 font-bold flex items-center space-x-1">
+                            <Ambulance className="w-3 h-3" />
+                            <span>{language === 'hi' ? 'चिकित्सा आपातकाल' : 'Medical Triage Req.'}</span>
                           </span>
-                        </button>
-                      }
+                        )}
+                      </div>
 
-                      {/* Mark Rescued Button */}
-                      {alert.status !== 'RESCUED' &&
-                      <button
-                        onClick={() => handleMarkRescued(alert.id)}
-                        className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow flex items-center space-x-1">
-                        
-                          <Check className="w-3.5 h-3.5" />
-                          <span>{language === 'hi' ? 'सुरक्षित बचाया' : 'Rescued'}</span>
+                      <div className="flex items-center space-x-1.5">
+                        {/* View Road Route Button */}
+                        <button
+                          onClick={() => setSelectedSosForRoute && setSelectedSosForRoute(alert)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1 transition-all ${
+                            isSelected
+                              ? 'bg-blue-600 text-white shadow'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                          }`}>
+                          <Navigation className="w-3.5 h-3.5" />
+                          <span>{language === 'hi' ? 'रास्ता देखें' : 'View Rescue Route'}</span>
                         </button>
-                      }
+
+                        {/* Dispatch Rescue Team Button */}
+                        {alert.status !== 'RESCUED' && (
+                          <button
+                            onClick={() => {
+                              setActiveDispatchSos(alert);
+                              if (setSelectedSosForRoute) setSelectedSosForRoute(alert);
+                            }}
+                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs shadow flex items-center space-x-1 transition-all hover:scale-105">
+                            <Siren className="w-3.5 h-3.5" />
+                            <span>
+                              {alert.status === 'DISPATCHED'
+                                ? language === 'hi' ? 'यूनिट बदलें' : 'Re-assign Unit'
+                                : language === 'hi' ? 'राहत दल भेजें' : 'Respond & Dispatch'}
+                            </span>
+                          </button>
+                        )}
+
+                        {/* Mark Rescued Button */}
+                        {alert.status !== 'RESCUED' && (
+                          <button
+                            onClick={() => handleMarkRescued(alert.id)}
+                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow flex items-center space-x-1">
+                            <Check className="w-3.5 h-3.5" />
+                            <span>{language === 'hi' ? 'सुरक्षित बचाया' : 'Rescued'}</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>);
-
-            })}
+                );
+              })
+            )}
           </div>
 
           {/* Right 5 Cols: Interactive Rescue Road Routing Map */}
@@ -282,25 +289,23 @@ export default function AdminPage() {
                 <span className="font-bold text-slate-900 dark:text-white flex items-center space-x-1.5">
                   <Navigation className="w-4 h-4 text-blue-500" />
                   <span>
-                    {language === 'hi' ? 'बचाव सड़क मार्ग:' : 'Rescue Road Vector:'} {activeSos?.nearestDepotName?.split(',')[0] || (language === 'hi' ? 'एनडीआरएफ बेस' : 'NDRF Base')} ➔ {activeSos?.senderName}
+                    {language === 'hi' ? 'बचाव सड़क मार्ग:' : 'Rescue Road Vector:'} {activeSos?.nearestDepotName?.split(',')[0] || (language === 'hi' ? 'एनडीआरएफ बेस' : 'NDRF Base')} ➔ {activeSos?.senderName || 'Active Rescue'}
                   </span>
                 </span>
               </div>
 
               {/* GIS Map with Road Route from Depot to Citizen */}
-              {activeSos &&
               <MapWrapper
-                center={activeSos.coordinates}
+                center={activeSos?.coordinates || [11.5510, 76.1305]}
                 zoom={12}
                 activeRescueSos={activeSos}
-                sosBeacons={sosAlerts}
-                height="420px" />
-
-              }
+                sosBeacons={safeSosList}
+                height="420px"
+              />
 
               {/* Route Summary Card */}
-              {activeSos &&
-              <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl space-y-2 text-xs">
+              {activeSos && (
+                <div className="bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl space-y-2 text-xs">
                   <div className="flex items-center justify-between font-bold">
                     <span className="text-slate-700 dark:text-slate-300">
                       {language === 'hi' ? 'प्रस्थान डिपो:' : 'Origin Depot:'}
@@ -323,29 +328,28 @@ export default function AdminPage() {
                     </span>
                   </div>
                 </div>
-              }
+              )}
             </div>
           </div>
         </div>
       </div>
 
       {/* Dispatch Modal Dialog */}
-      {activeDispatchSos &&
-      <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      {activeDispatchSos && (
+        <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="glass-panel max-w-lg w-full p-6 rounded-2xl shadow-2xl space-y-4 border-2 border-amber-500">
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <div className="flex items-center space-x-2">
                 <Siren className="w-5 h-5 text-amber-500 animate-bounce" />
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  {language === 'hi' ?
-                `${activeDispatchSos.senderName} के लिए बचाव दल प्रेषण` :
-                `Dispatch Rescue Squad to ${activeDispatchSos.senderName}`}
+                  {language === 'hi'
+                    ? `${activeDispatchSos.senderName} के लिए बचाव दल प्रेषण`
+                    : `Dispatch Rescue Squad to ${activeDispatchSos.senderName}`}
                 </h3>
               </div>
               <button
-              onClick={() => setActiveDispatchSos(null)}
-              className="text-slate-400 hover:text-white font-bold text-sm">
-              
+                onClick={() => setActiveDispatchSos(null)}
+                className="text-slate-400 hover:text-white font-bold text-sm">
                 ✕
               </button>
             </div>
@@ -357,11 +361,11 @@ export default function AdminPage() {
               <div>
                 <strong>{language === 'hi' ? 'फंसे व्यक्ति:' : 'Trapped Persons:'}</strong> {activeDispatchSos.peopleCount} {language === 'hi' ? 'नागरिक' : 'individuals'}
               </div>
-              {activeDispatchSos.notes &&
-            <div>
+              {activeDispatchSos.notes && (
+                <div>
                   <strong>{language === 'hi' ? 'नागरिक संदेश:' : 'Citizen Note:'}</strong> “{activeDispatchSos.notes}”
                 </div>
-            }
+              )}
             </div>
 
             <form onSubmit={handleConfirmDispatch} className="space-y-3 text-xs">
@@ -370,10 +374,9 @@ export default function AdminPage() {
                   {language === 'hi' ? 'बचाव दल / यूनिट चुनें:' : 'Select Rescue Squad / Unit:'}
                 </label>
                 <select
-                value={selectedUnit}
-                onChange={(e) => setSelectedUnit(e.target.value)}
-                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-semibold text-slate-900 dark:text-white">
-                
+                  value={selectedUnit}
+                  onChange={(e) => setSelectedUnit(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-semibold text-slate-900 dark:text-white">
                   <option value="NDRF 04 Bn Rapid Deployment Squad">🛡️ NDRF 04 Bn Rapid Deployment Squad (Kalpetta)</option>
                   <option value="SDRF Mountain Search & Rescue Base">⛰️ SDRF Mountain Search & Rescue Base (Meppadi)</option>
                   <option value="Kerala Fire & Rescue Specialized Ops">🚒 Kerala Fire & Rescue Specialized Ops (Vythiri)</option>
@@ -387,25 +390,23 @@ export default function AdminPage() {
                   {language === 'hi' ? 'परिचालन निर्देश एवं रूट प्रोटोकॉल:' : 'Responder Instructions & Route Protocol:'}
                 </label>
                 <textarea
-                rows={3}
-                value={responderNotes}
-                onChange={(e) => setResponderNotes(e.target.value)}
-                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white" />
-              
+                  rows={3}
+                  value={responderNotes}
+                  onChange={(e) => setResponderNotes(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                />
               </div>
 
               <div className="flex gap-2 pt-2">
                 <button
-                type="button"
-                onClick={() => setActiveDispatchSos(null)}
-                className="flex-1 py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold">
-                
+                  type="button"
+                  onClick={() => setActiveDispatchSos(null)}
+                  className="flex-1 py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold">
                   {language === 'hi' ? 'रद्द करें' : 'Cancel'}
                 </button>
                 <button
-                type="submit"
-                className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl font-bold shadow flex items-center justify-center space-x-1.5">
-                
+                  type="submit"
+                  className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl font-bold shadow flex items-center justify-center space-x-1.5">
                   <Send className="w-3.5 h-3.5" />
                   <span>{language === 'hi' ? 'बचाव दल रवाना करें' : 'Authorize & Dispatch Team'}</span>
                 </button>
@@ -413,7 +414,7 @@ export default function AdminPage() {
             </form>
           </div>
         </div>
-      }
+      )}
 
       {/* Grid: Habitation Capacity Overrides + PostGIS Console + Broadcast Dispatch */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -435,8 +436,8 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {habitations.slice(0, 4).map((hab) =>
-                  <tr key={hab.id}>
+                  {(habitations || []).slice(0, 4).map((hab) => (
+                    <tr key={hab.id}>
                       <td className="py-2.5 font-bold text-slate-900 dark:text-white">
                         {hab.name}
                         <span className="block text-[10px] text-slate-400 font-mono">{hab.id}</span>
@@ -447,35 +448,32 @@ export default function AdminPage() {
                       <td className="py-2.5 font-mono">{hab.population}</td>
                       <td className="py-2.5">
                         <span
-                        className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                        hab.immediateRelocationNeeded ?
-                        'bg-red-500/20 text-red-500' :
-                        'bg-slate-100 dark:bg-slate-800 text-slate-400'}`
-                        }>
-                        
-                          {hab.immediateRelocationNeeded ?
-                        language === 'hi' ? 'अनिवार्य निकासी' : 'CRITICAL MANDATE' :
-                        language === 'hi' ? 'सामान्य निगरानी' : 'MONITORING'}
+                          className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                            hab.immediateRelocationNeeded
+                              ? 'bg-red-500/20 text-red-500'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                          }`}>
+                          {hab.immediateRelocationNeeded
+                            ? language === 'hi' ? 'अनिवार्य निकासी' : 'CRITICAL MANDATE'
+                            : language === 'hi' ? 'सामान्य निगरानी' : 'MONITORING'}
                         </span>
                       </td>
                       <td className="py-2.5 text-right">
                         <div className="inline-flex items-center space-x-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
                           <button
-                          onClick={() => handleCapacityChange(hab.id, -50)}
-                          className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-red-500 hover:text-white font-bold">
-                          
+                            onClick={() => handleCapacityChange(hab.id, -50)}
+                            className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-red-500 hover:text-white font-bold">
                             -50
                           </button>
                           <button
-                          onClick={() => handleCapacityChange(hab.id, 50)}
-                          className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-emerald-500 hover:text-white font-bold">
-                          
+                            onClick={() => handleCapacityChange(hab.id, 50)}
+                            className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-emerald-500 hover:text-white font-bold">
                             +50
                           </button>
                         </div>
                       </td>
                     </tr>
-                  )}
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -495,16 +493,16 @@ export default function AdminPage() {
               </h3>
             </div>
 
-            {broadcastSuccess &&
-            <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-xs font-bold flex items-center space-x-2">
+            {broadcastSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-xs font-bold flex items-center space-x-2">
                 <CheckCircle2 className="w-4 h-4" />
                 <span>
-                  {language === 'hi' ?
-                'एसएमएस, वॉयस आईवीआर एवं सायरन नेटवर्क पर आपात प्रसारण प्रसारित!' :
-                'Broadcast Queued across SMS, Voice Gateways, & Siren Networks!'}
+                  {language === 'hi'
+                    ? 'एसएमएस, वॉयस आईवीआर एवं सायरन नेटवर्क पर आपात प्रसारण प्रसारित!'
+                    : 'Broadcast Queued across SMS, Voice Gateways, & Siren Networks!'}
                 </span>
               </div>
-            }
+            )}
 
             <form onSubmit={handleSendBroadcast} className="space-y-4 text-xs">
               <div>
@@ -515,7 +513,6 @@ export default function AdminPage() {
                   value={broadcastTarget}
                   onChange={(e) => setBroadcastTarget(e.target.value)}
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-mono">
-                  
                   <option value="ALL_RED_ZONES">
                     {language === 'hi' ? 'सभी रेड-ज़ोन (वायनाड सेक्टर)' : 'All Critical Hazard Red-Zones (Wayanad Sector)'}
                   </option>
@@ -535,8 +532,8 @@ export default function AdminPage() {
                   rows={4}
                   value={broadcastMessage}
                   onChange={(e) => setBroadcastMessage(e.target.value)}
-                  className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-sans focus:ring-2 focus:ring-red-500" />
-                
+                  className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-sans focus:ring-2 focus:ring-red-500"
+                />
               </div>
 
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 space-y-2">
@@ -554,7 +551,6 @@ export default function AdminPage() {
               <button
                 type="submit"
                 className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold flex items-center justify-center space-x-2 shadow-lg shadow-red-600/30 transition-all hover:scale-105">
-                
                 <Send className="w-4 h-4" />
                 <span>{language === 'hi' ? 'आपातकालीन चेतावनी प्रसारित करें' : 'Transmit Geofenced Emergency Warning'}</span>
               </button>
@@ -577,7 +573,7 @@ export default function AdminPage() {
                   : 'Safe Shelters & Relocation Staging Hubs Infrastructure'}
               </h3>
               <span className="text-xs font-mono font-bold bg-teal-500/10 text-teal-600 dark:text-teal-400 px-2.5 py-0.5 rounded-full border border-teal-500/30">
-                {shelters?.length || 0} ACTIVE HUBS
+                {(shelters || []).length} ACTIVE HUBS
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -673,7 +669,7 @@ export default function AdminPage() {
                   {shelter.currentOccupancy} Occ ({Math.round(((shelter.currentOccupancy || 0) / (shelter.totalCapacity || 1)) * 100)}%)
                 </span>
                 <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${shelter.coordinates[0]},${shelter.coordinates[1]}`}
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${shelter.coordinates?.[0] || 11.55},${shelter.coordinates?.[1] || 76.13}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[10px] text-teal-500 font-bold hover:underline">
@@ -684,6 +680,6 @@ export default function AdminPage() {
           ))}
         </div>
       </div>
-    </div>);
-
+    </div>
+  );
 }
