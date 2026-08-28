@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import {
   Building2,
@@ -22,8 +22,14 @@ import {
   AlertCircle,
   Sparkles,
   Loader2,
-  PlusCircle
+  PlusCircle,
+  ChevronDown
 } from 'lucide-react';
+import {
+  INDIA_STATES_AND_UTS,
+  getCitiesForState,
+  getDefaultCoordsForState
+} from '@/data/indiaLocationsData';
 
 const SHELTER_TYPES = [
   {
@@ -101,6 +107,8 @@ export default function AddShelterModal() {
   const [name, setName] = useState('');
   const [state, setState] = useState('Kerala');
   const [district, setDistrict] = useState('Wayanad');
+  const [isCustomCity, setIsCustomCity] = useState(false);
+  const [customCityInput, setCustomCityInput] = useState('');
   const [address, setAddress] = useState('');
   const [latitude, setLatitude] = useState(userCoordinates?.[0] ? userCoordinates[0].toFixed(5) : '11.55400');
   const [longitude, setLongitude] = useState(userCoordinates?.[1] ? userCoordinates[1].toFixed(5) : '76.12650');
@@ -120,6 +128,40 @@ export default function AddShelterModal() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Available cities for currently selected state
+  const availableCities = getCitiesForState(state);
+
+  // When state changes, update district to first available city and update approximate default coords
+  const handleStateChange = (selectedStateName) => {
+    setState(selectedStateName);
+    const cities = getCitiesForState(selectedStateName);
+    if (cities && cities.length > 0) {
+      setDistrict(cities[0]);
+      setIsCustomCity(false);
+      setCustomCityInput('');
+    } else {
+      setIsCustomCity(true);
+      setDistrict('CUSTOM');
+    }
+
+    // If user hasn't customized coordinates with live GPS, provide state center
+    if (!userCoordinates) {
+      const defCoords = getDefaultCoordsForState(selectedStateName);
+      setLatitude(defCoords[0].toFixed(5));
+      setLongitude(defCoords[1].toFixed(5));
+    }
+  };
+
+  const handleCityChange = (val) => {
+    if (val === '__CUSTOM__') {
+      setIsCustomCity(true);
+      setDistrict('CUSTOM');
+    } else {
+      setIsCustomCity(false);
+      setDistrict(val);
+    }
+  };
 
   if (!isAddShelterModalOpen) return null;
 
@@ -145,7 +187,8 @@ export default function AddShelterModal() {
 
   // 1-click Geocode from Address
   const handleGeocodeAddress = async () => {
-    const queryStr = `${name} ${address} ${district} ${state}`.trim();
+    const finalDistrict = isCustomCity ? customCityInput : district;
+    const queryStr = `${name} ${address} ${finalDistrict} ${state}`.trim();
     if (!queryStr) return;
 
     setIsGeocoding(true);
@@ -168,38 +211,64 @@ export default function AddShelterModal() {
         );
       }
     } catch {
-      setErrorMessage('Geocoding service unavailable. Please enter coordinates manually.');
+      setErrorMessage(
+        language === 'hi'
+          ? 'जियोकोडिंग सेवा से संपर्क नहीं हो सका।'
+          : 'Could not connect to geocoding service.'
+      );
     } finally {
       setIsGeocoding(false);
     }
   };
 
-  // Toggle amenities
-  const handleToggleAmenity = (id) => {
-    setSelectedAmenities((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
+  const handleToggleAmenity = (amenityId) => {
+    if (selectedAmenities.includes(amenityId)) {
+      setSelectedAmenities(selectedAmenities.filter((a) => a !== amenityId));
+    } else {
+      setSelectedAmenities([...selectedAmenities, amenityId]);
+    }
   };
 
-  // Form submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
     setSuccessMessage('');
 
-    if (!name.trim()) {
-      setErrorMessage(language === 'hi' ? 'कृपया केंद्र का नाम दर्ज करें' : 'Facility Name is required');
+    if (!isAuthorized) {
+      setErrorMessage(
+        language === 'hi'
+          ? 'सुरक्षा अनुमति अस्वीकृत: केवल SEOC प्रशासक या फील्ड स्टाफ नए आश्रय जोड़ सकते हैं।'
+          : 'Access Denied: Only SEOC Administrators or Relief Staff are authorized to add new shelters.'
+      );
       return;
     }
 
+    if (!name.trim()) {
+      setErrorMessage(language === 'hi' ? 'कृपया केंद्र का नाम दर्ज करें।' : 'Please enter facility name.');
+      return;
+    }
+
+    const finalDistrict = isCustomCity ? customCityInput.trim() || 'Sector Hub' : district;
+
     const latNum = parseFloat(latitude);
     const lonNum = parseFloat(longitude);
+    const capNum = parseInt(totalCapacity, 10);
+    const occNum = parseInt(currentOccupancy, 10) || 0;
 
-    if (isNaN(latNum) || isNaN(lonNum) || latNum < -90 || latNum > 90 || lonNum < -180 || lonNum > 180) {
+    if (isNaN(latNum) || isNaN(lonNum)) {
       setErrorMessage(
         language === 'hi'
-          ? 'अमान्य जीपीएस निर्देशांक (अक्षांश: -90 से 90, देशांतर: -180 से 180)'
-          : 'Invalid coordinates. Latitude must be between -90 and 90, Longitude between -180 and 180.'
+          ? 'अमान्य निर्देशांक। कृपया वैध अक्षांश व देशांतर संख्या दर्ज करें।'
+          : 'Invalid coordinates. Please provide valid numbers.'
+      );
+      return;
+    }
+
+    if (isNaN(capNum) || capNum <= 0) {
+      setErrorMessage(
+        language === 'hi'
+          ? 'कृपया वैध कुल क्षमता दर्ज करें।'
+          : 'Please enter a valid total capacity.'
       );
       return;
     }
@@ -209,18 +278,18 @@ export default function AddShelterModal() {
     try {
       const payload = {
         name: name.trim(),
-        address: (address || `${name}, ${district}, ${state}`).trim(),
-        district: district.trim(),
-        state: state.trim(),
-        totalCapacity: parseInt(totalCapacity, 10) || 500,
-        currentOccupancy: parseInt(currentOccupancy, 10) || 0,
-        coordinates: [latNum, lonNum],
-        contactPerson: contactPerson.trim() || `${currentUser?.name || 'Duty In-Charge'} (SEOC)`,
-        phone: phone.trim() || '+91 112',
         type,
-        facilities: selectedAmenities,
+        state,
+        district: finalDistrict,
+        address: address.trim() || `${name}, ${finalDistrict}, ${state}`,
+        coordinates: [latNum, lonNum],
+        totalCapacity: capNum,
+        currentOccupancy: occNum,
+        contactPerson: contactPerson.trim() || (currentUser?.name ? `${currentUser.name} (${currentUser.role})` : 'SEOC Relief Officer'),
+        phone: phone.trim() || '+91 112',
+        amenities: selectedAmenities,
         addedByRole: currentUser?.role || 'STAFF',
-        addedByName: currentUser?.name || 'Field Officer'
+        addedByName: currentUser?.name || 'Authorized Officer'
       };
 
       const result = await addSafeShelter(payload);
@@ -228,46 +297,54 @@ export default function AddShelterModal() {
       if (result && result.success) {
         setSuccessMessage(
           language === 'hi'
-            ? '✅ सुरक्षित आश्रय / पुनर्वास हब सफलतापूर्वक पंजीकृत और जीआईएस मानचित्र पर सक्रिय कर दिया गया है!'
-            : '✅ Safe Haven / Relocation Hub registered successfully and activated on Live GIS Map!'
+            ? `सफलता: "${name}" को राष्ट्रीय सुरक्षित आश्रय ग्रिड में जोड़ा गया!`
+            : `Success: "${name}" successfully registered into active GIS safe havens network!`
         );
         setTimeout(() => {
           closeAddShelterModal();
-        }, 1400);
+        }, 1200);
       } else {
-        setErrorMessage(result?.error || 'Failed to register facility.');
+        setErrorMessage(
+          result?.error ||
+            (language === 'hi'
+              ? 'आश्रय सहेजने में विफल। कृपया पुनः प्रयास करें।'
+              : 'Failed to save shelter. Please try again.')
+        );
       }
     } catch (err) {
-      setErrorMessage(err.message || 'An error occurred while saving.');
+      setErrorMessage(err.message || 'An unexpected error occurred.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const statesList = INDIA_STATES_AND_UTS.filter((item) => item.type === 'State');
+  const utsList = INDIA_STATES_AND_UTS.filter((item) => item.type === 'Union Territory');
+
   return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-lg animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 border border-teal-500/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-150">
+      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden my-6">
         {/* Header Ribbon */}
-        <div className="bg-gradient-to-r from-teal-700 via-emerald-700 to-teal-800 p-5 text-white flex items-center justify-between shadow-md">
+        <div className="bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 p-5 text-white flex items-center justify-between shadow-md">
           <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-white/20 rounded-2xl backdrop-blur-sm shadow-inner">
-              <Building2 className="w-7 h-7 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white text-xl backdrop-blur-sm">
+              🏛️
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h2 className="text-lg font-black tracking-wide">
+                <h2 className="text-base sm:text-lg font-black tracking-tight">
                   {language === 'hi'
-                    ? 'नया सुरक्षित आश्रय / पुनर्वास हब पंजीकरण'
-                    : 'REGISTER SAFE HAVEN / RELOCATION HUB'}
+                    ? 'नया सुरक्षित आश्रय / पुनर्वास हब जोड़ें'
+                    : 'Register New Safe Haven / Relocation Hub'}
                 </h2>
-                <span className="text-[10px] bg-teal-950/70 text-teal-200 px-2 py-0.5 rounded-full border border-teal-400/40 font-bold uppercase font-mono">
-                  GIS Mesh Node
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 uppercase tracking-wider">
+                  GIS Mesh
                 </span>
               </div>
-              <p className="text-xs text-teal-100/90 font-medium mt-0.5">
+              <p className="text-xs text-teal-100">
                 {language === 'hi'
-                  ? 'अधिकारियों एवं राहत दलों द्वारा नए सुरक्षित शिविर एवं वहन क्षमता का त्वरित जीआईएस समावेश'
-                  : 'Authorized field registration for Safe Shelters & Transit Relocation Staging Hubs'}
+                  ? 'राष्ट्रीय भू-स्थानिक नेटवर्क पर नया आपदा-रोधी आश्रय केंद्र जोड़ें'
+                  : 'Add verified disaster-resilient shelter or transit hub to national GIS routing'}
               </p>
             </div>
           </div>
@@ -301,342 +378,399 @@ export default function AddShelterModal() {
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between max-w-md mx-auto">
-              <span>{language === 'hi' ? 'वर्तमान निकासी स्तर:' : 'Current Clearance Role:'}</span>
-              <span className="font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded border border-amber-500/20">
-                {currentUser?.role || 'CITIZEN'}
+              <span className="flex items-center space-x-2">
+                <Lock className="w-4 h-4 text-amber-500" />
+                <span>{language === 'hi' ? 'वर्तमान भूमिका:' : 'Current Role:'}</span>
+                <strong className="text-slate-800 dark:text-slate-200 uppercase font-mono">
+                  {currentUser?.role || 'CITIZEN'}
+                </strong>
               </span>
+              <span className="text-[11px] text-red-500 font-bold">● LACKING CLEARANCE</span>
             </div>
 
-            <div className="flex items-center justify-center space-x-3 pt-2">
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={closeAddShelterModal}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                {language === 'hi' ? 'वापस जाएं' : 'Dismiss'}
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   closeAddShelterModal();
                   setIsAuthModalOpen(true);
                 }}
-                className="px-6 py-3 bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-700 hover:to-emerald-800 text-white rounded-xl text-xs font-bold shadow-lg shadow-teal-600/30 flex items-center space-x-2 transition-all hover:scale-105">
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-700 hover:to-emerald-800 text-white font-black text-xs shadow-lg shadow-teal-600/30 flex items-center justify-center space-x-2 transition-all hover:scale-105">
                 <ShieldCheck className="w-4 h-4" />
-                <span>
-                  {language === 'hi'
-                    ? 'प्रशासक / स्टाफ के रूप में लॉगिन करें'
-                    : 'Authenticate as Admin / Staff'}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={closeAddShelterModal}
-                className="px-5 py-3 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
-                {language === 'hi' ? 'रद्द करें' : 'Dismiss'}
+                <span>{language === 'hi' ? 'प्रशासक / स्टाफ के रूप में लॉगिन करें' : 'Authenticate as Admin / Staff'}</span>
               </button>
             </div>
           </div>
         ) : (
           <>
-            {/* Clearance Role Status Notification */}
-            <div className="px-6 py-2.5 bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+            {/* Active Submitter Clearance Bar */}
+            <div className="px-6 py-2.5 bg-teal-500/10 dark:bg-teal-950/40 border-b border-teal-500/20 flex items-center justify-between text-xs text-teal-800 dark:text-teal-300">
               <div className="flex items-center space-x-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                <span className="text-slate-600 dark:text-slate-300 font-medium">
-                  {language === 'hi' ? 'संचालन निकासी स्तर:' : 'Authorized Clearance:'}
+                <ShieldCheck className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                <span>
+                  {language === 'hi' ? 'सत्यापित ऑपरेटर:' : 'Verified Operator:'}{' '}
+                  <strong>{currentUser?.name || 'SEOC Command Officer'}</strong>
                 </span>
-                <span
-                  className={`font-bold px-2 py-0.5 rounded-md uppercase text-[10px] ${
-                    currentUser?.role === 'ADMIN'
-                      ? 'bg-red-500/20 text-red-600 dark:text-red-400'
-                      : 'bg-blue-500/20 text-blue-600 dark:text-blue-400'
-                  }`}>
-                  {currentUser?.role || 'STAFF'} • {currentUser?.name || 'Field Officer'}
+                <span className="text-[10px] font-mono px-2 py-0.2 rounded-full bg-teal-500/20 text-teal-700 dark:text-teal-300 font-bold">
+                  {currentUser?.role || 'STAFF'}
                 </span>
               </div>
-            </div>
-
-            {/* Scrollable Form Body */}
-            <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 flex-1">
-              {errorMessage && (
-                <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs rounded-xl flex items-center space-x-2 animate-shake">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{errorMessage}</span>
-                </div>
-              )}
-
-              {successMessage && (
-                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs rounded-xl flex items-center space-x-2 font-bold animate-in fade-in">
-                  <Sparkles className="w-4 h-4 shrink-0" />
-                  <span>{successMessage}</span>
-                </div>
-              )}
-
-          {/* 1. Facility Category Picker */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">
-              {language === 'hi' ? '1. आश्रय / पुनर्वास हब का प्रकार चुनें' : '1. Select Facility Category'}
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {SHELTER_TYPES.map((st) => {
-                const isSelected = type === st.id;
-                return (
-                  <button
-                    key={st.id}
-                    type="button"
-                    onClick={() => setType(st.id)}
-                    className={`p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between ${
-                      isSelected
-                        ? 'border-teal-500 bg-teal-500/15 text-teal-700 dark:text-teal-300 ring-2 ring-teal-500/30 shadow-sm'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
-                    }`}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xl">{st.icon}</span>
-                      <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold">
-                        {st.badge}
-                      </span>
-                    </div>
-                    <span className="text-xs font-bold leading-tight">
-                      {language === 'hi' ? st.labelHi : st.labelEn}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 2. Basic Facility Details */}
-          <div className="space-y-3 pt-1">
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-              {language === 'hi' ? '2. केंद्र का नाम एवं स्थान विवरण' : '2. Facility Name & Geographic Sector'}
-            </label>
-
-            <div>
-              <input
-                type="text"
-                placeholder={
-                  language === 'hi'
-                    ? 'उदा. वेल्लारमाला सामुदायिक पुनर्वास हब'
-                    : 'Facility Name (e.g., Vellarmala Community Relocation Hub)'
-                }
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-teal-500 outline-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <input
-                  type="text"
-                  placeholder={language === 'hi' ? 'राज्य (उदा. Kerala)' : 'State (e.g., Kerala)'}
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  required
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
-                />
-              </div>
-              <div>
-                <input
-                  type="text"
-                  placeholder={language === 'hi' ? 'जिला / सेक्टर (उदा. Wayanad)' : 'District (e.g., Wayanad)'}
-                  value={district}
-                  onChange={(e) => setDistrict(e.target.value)}
-                  required
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="relative">
-              <input
-                type="text"
-                placeholder={
-                  language === 'hi'
-                    ? 'विस्तृत पता / लैंडमार्क (उदा. बाईपास रोड, मेप्पाडी)'
-                    : 'Full Street Address / Landmark (e.g., Bypass Junction, NH 766, Meppadi)'
-                }
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs pr-28"
-              />
-              <button
-                type="button"
-                onClick={handleGeocodeAddress}
-                disabled={isGeocoding}
-                className="absolute right-1.5 top-1.5 px-2.5 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-[10px] font-bold transition-all flex items-center space-x-1 shadow-sm">
-                {isGeocoding ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <>
-                    <Search className="w-3 h-3" />
-                    <span>{language === 'hi' ? 'पता खोजें' : 'Geocode'}</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* 3. GIS Coordinates Picker */}
-          <div className="p-3.5 bg-teal-500/5 dark:bg-teal-950/20 border border-teal-500/30 rounded-2xl space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-teal-800 dark:text-teal-300 flex items-center space-x-1.5">
-                <MapPin className="w-4 h-4 text-teal-500" />
-                <span>{language === 'hi' ? '3. जीपीएस निर्देशांक (अक्षांश व देशांतर)' : '3. Precise GIS Coordinates'}</span>
+              <span className="text-[11px] font-mono text-teal-600 dark:text-teal-400 hidden sm:inline">
+                CLEARANCE LEVEL: 1-A
               </span>
-
-              <button
-                type="button"
-                onClick={handleLockGPS}
-                className="px-2.5 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-[10px] font-bold transition-all flex items-center space-x-1 shadow-sm">
-                <LocateFixed className="w-3 h-3" />
-                <span>{language === 'hi' ? '📍 वर्तमान जीपीएस लॉक करें' : '📍 Lock My GPS'}</span>
-              </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[10px] font-mono text-slate-500 dark:text-slate-400 mb-0.5">
-                  Latitude (अक्षांश)
-                </label>
-                <input
-                  type="number"
-                  step="0.00001"
-                  value={latitude}
-                  onChange={(e) => setLatitude(e.target.value)}
-                  required
-                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs"
-                />
+            {/* Error / Success Notifications */}
+            {errorMessage && (
+              <div className="mx-6 mt-4 p-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMessage}</span>
               </div>
-              <div>
-                <label className="block text-[10px] font-mono text-slate-500 dark:text-slate-400 mb-0.5">
-                  Longitude (देशांतर)
-                </label>
-                <input
-                  type="number"
-                  step="0.00001"
-                  value={longitude}
-                  onChange={(e) => setLongitude(e.target.value)}
-                  required
-                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs"
-                />
+            )}
+            {successMessage && (
+              <div className="mx-6 mt-4 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{successMessage}</span>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* 4. Capacity & Nodal Logistics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                {language === 'hi' ? 'कुल क्षमता (बिस्तर)' : 'Total Capacity'}
-              </label>
-              <input
-                type="number"
-                min="10"
-                max="50000"
-                value={totalCapacity}
-                onChange={(e) => setTotalCapacity(e.target.value)}
-                required
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold"
-              />
-            </div>
+            {/* Modal Body Form */}
+            <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              {/* 1. Facility Category Picker */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">
+                  {language === 'hi' ? '1. आश्रय / पुनर्वास हब का प्रकार चुनें' : '1. Select Facility Category'}
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {SHELTER_TYPES.map((st) => {
+                    const isSelected = type === st.id;
+                    return (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => setType(st.id)}
+                        className={`p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                          isSelected
+                            ? 'border-teal-500 bg-teal-500/15 text-teal-700 dark:text-teal-300 ring-2 ring-teal-500/30 shadow-sm'
+                            : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                        }`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xl">{st.icon}</span>
+                          <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold">
+                            {st.badge}
+                          </span>
+                        </div>
+                        <span className="text-xs font-bold leading-tight">
+                          {language === 'hi' ? st.labelHi : st.labelEn}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                {language === 'hi' ? 'वर्तमान अधिभोग' : 'Live Occupancy'}
-              </label>
-              <input
-                type="number"
-                min="0"
-                max={totalCapacity || '1000'}
-                value={currentOccupancy}
-                onChange={(e) => setCurrentOccupancy(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold"
-              />
-            </div>
+              {/* 2. Basic Facility Details with India States/UTs & Cities Dropdown */}
+              <div className="space-y-3 pt-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  {language === 'hi' ? '2. केंद्र का नाम एवं राज्य / शहर चयन' : '2. Facility Name, State / UT & City'}
+                </label>
 
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                {language === 'hi' ? 'नोडल अधिकारी' : 'Nodal In-Charge'}
-              </label>
-              <input
-                type="text"
-                placeholder="Inspector / Officer"
-                value={contactPerson}
-                onChange={(e) => setContactPerson(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
-              />
-            </div>
+                <div>
+                  <input
+                    type="text"
+                    placeholder={
+                      language === 'hi'
+                        ? 'उदा. वेल्लारमाला सामुदायिक पुनर्वास हब'
+                        : 'Facility Name (e.g., Vellarmala Community Relocation Hub)'
+                    }
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-teal-500 outline-none"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                {language === 'hi' ? '24x7 फोन नंबर' : '24x7 Hotline'}
-              </label>
-              <input
-                type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
-                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono"
-              />
-            </div>
-          </div>
+                {/* State / Union Territory & City Dropdowns */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* State / UT Dropdown */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                      {language === 'hi' ? 'राज्य / केंद्र शासित प्रदेश (State / UT)' : 'State / Union Territory (28 States + 8 UTs)'}
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={state}
+                        onChange={(e) => handleStateChange(e.target.value)}
+                        required
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold appearance-none cursor-pointer focus:ring-2 focus:ring-teal-500 outline-none pr-8">
+                        <optgroup label={language === 'hi' ? 'भारतीय राज्य (28 States)' : 'Indian States (28 States)'}>
+                          {statesList.map((st) => (
+                            <option key={st.name} value={st.name}>
+                              {st.name} {language === 'hi' ? `(${st.nameHi})` : ''}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label={language === 'hi' ? 'केंद्र शासित प्रदेश (8 UTs)' : 'Union Territories (8 UTs)'}>
+                          {utsList.map((ut) => (
+                            <option key={ut.name} value={ut.name}>
+                              {ut.name} {language === 'hi' ? `(${ut.nameHi})` : ''}
+                            </option>
+                          ))}
+                        </optgroup>
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-3 pointer-events-none" />
+                    </div>
+                  </div>
 
-          {/* 5. Essential Amenities & Relocation Infrastructure */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">
-              {language === 'hi' ? '5. उपलब्ध राहत सुविधाएं एवं पारगमन बुनियादी ढांचा' : '5. Verified Amenities & Logistics'}
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-              {AMENITY_OPTIONS.map((am) => {
-                const checked = selectedAmenities.includes(am.id);
-                return (
+                  {/* City / District Dropdown */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                      {language === 'hi' ? 'शहर / जिला / सेक्टर (City / District)' : `City / District in ${state}`}
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={isCustomCity ? '__CUSTOM__' : district}
+                        onChange={(e) => handleCityChange(e.target.value)}
+                        required
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold appearance-none cursor-pointer focus:ring-2 focus:ring-teal-500 outline-none pr-8">
+                        {availableCities.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                        <option value="__CUSTOM__">
+                          {language === 'hi' ? '➕ अन्य (कस्टम शहर का नाम टाइप करें)' : '➕ Other / Enter Custom City'}
+                        </option>
+                      </select>
+                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-3 pointer-events-none" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Custom City Text Input (If '+ Other / Enter Custom City' is picked) */}
+                {isCustomCity && (
+                  <div className="animate-in fade-in duration-150">
+                    <input
+                      type="text"
+                      placeholder={
+                        language === 'hi'
+                          ? 'कस्टम शहर / नगर / वार्ड का नाम दर्ज करें'
+                          : 'Enter custom city, municipality, or tehsil name'
+                      }
+                      value={customCityInput}
+                      onChange={(e) => setCustomCityInput(e.target.value)}
+                      required
+                      className="w-full px-3.5 py-2 rounded-xl border border-teal-500/50 bg-teal-50/50 dark:bg-teal-950/20 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-teal-500 outline-none"
+                    />
+                  </div>
+                )}
+
+                {/* Street Address & Geocode */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder={
+                      language === 'hi'
+                        ? 'विस्तृत पता / लैंडमार्क (उदा. बाईपास रोड, मेप्पाडी)'
+                        : 'Full Street Address / Landmark (e.g., Bypass Junction, NH 766, Meppadi)'
+                    }
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs pr-28"
+                  />
                   <button
-                    key={am.id}
                     type="button"
-                    onClick={() => handleToggleAmenity(am.id)}
-                    className={`p-2 rounded-xl border text-left text-xs transition-all flex items-center justify-between ${
-                      checked
-                        ? 'border-emerald-500 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 font-bold'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
-                    }`}>
-                    <span>{language === 'hi' ? am.labelHi : am.labelEn}</span>
-                    {checked && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 ml-1" />}
+                    onClick={handleGeocodeAddress}
+                    disabled={isGeocoding}
+                    className="absolute right-1.5 top-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-[10px] font-bold transition-all flex items-center space-x-1 shadow-sm">
+                    {isGeocoding ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <>
+                        <Search className="w-3 h-3" />
+                        <span>{language === 'hi' ? 'पता खोजें' : 'Geocode'}</span>
+                      </>
+                    )}
                   </button>
-                );
-              })}
-            </div>
-          </div>
+                </div>
+              </div>
 
-          {/* Submit Action */}
-          <div className="pt-2 flex gap-3">
-            <button
-              type="button"
-              onClick={closeAddShelterModal}
-              className="flex-1 py-3 px-4 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-              {language === 'hi' ? 'रद्द करें' : 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex-[2] py-3 px-4 rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-700 hover:to-emerald-800 text-white font-bold text-xs shadow-lg shadow-teal-600/30 flex items-center justify-center space-x-2 transition-all hover:scale-[1.02] disabled:opacity-50">
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>{language === 'hi' ? 'पंजीकृत किया जा रहा है...' : 'Registering on GIS Mesh...'}</span>
-                </>
-              ) : (
-                <>
-                  <Building2 className="w-4 h-4" />
-                  <span>
-                    {language === 'hi'
-                      ? 'सुरक्षित आश्रय / हब पंजीकृत करें'
-                      : 'Register Safe Haven / Relocation Hub'}
+              {/* 3. GIS Coordinates Picker */}
+              <div className="p-3.5 bg-teal-500/5 dark:bg-teal-950/20 border border-teal-500/30 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-teal-800 dark:text-teal-300 flex items-center space-x-1.5">
+                    <MapPin className="w-4 h-4 text-teal-500" />
+                    <span>
+                      {language === 'hi'
+                        ? '3. जीपीएस निर्देशांक (अक्षांश व देशांतर)'
+                        : '3. Precise GIS Coordinates'}
+                    </span>
                   </span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </>
-    )}
-  </div>
-</div>
+
+                  <button
+                    type="button"
+                    onClick={handleLockGPS}
+                    className="px-2.5 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-[10px] font-bold transition-all flex items-center space-x-1 shadow-sm">
+                    <LocateFixed className="w-3 h-3" />
+                    <span>{language === 'hi' ? '📍 वर्तमान जीपीएस लॉक करें' : '📍 Lock My GPS'}</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-mono text-slate-500 dark:text-slate-400 mb-0.5">
+                      Latitude (अक्षांश)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.00001"
+                      value={latitude}
+                      onChange={(e) => setLatitude(e.target.value)}
+                      required
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-mono text-slate-500 dark:text-slate-400 mb-0.5">
+                      Longitude (देशांतर)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.00001"
+                      value={longitude}
+                      onChange={(e) => setLongitude(e.target.value)}
+                      required
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Capacity & Nodal Logistics */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    {language === 'hi' ? 'कुल क्षमता (बिस्तर)' : 'Total Capacity'}
+                  </label>
+                  <input
+                    type="number"
+                    min="10"
+                    max="50000"
+                    value={totalCapacity}
+                    onChange={(e) => setTotalCapacity(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    {language === 'hi' ? 'वर्तमान अधिभोग' : 'Live Occupancy'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={totalCapacity || '1000'}
+                    value={currentOccupancy}
+                    onChange={(e) => setCurrentOccupancy(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    {language === 'hi' ? 'नोडल अधिकारी' : 'Nodal In-Charge'}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Inspector / Officer"
+                    value={contactPerson}
+                    onChange={(e) => setContactPerson(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    {language === 'hi' ? '24x7 फोन नंबर' : '24x7 Hotline'}
+                  </label>
+                  <input
+                    type="text"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* 5. Essential Amenities & Relocation Infrastructure */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">
+                  {language === 'hi'
+                    ? '5. उपलब्ध राहत सुविधाएं एवं पारगमन बुनियादी ढांचा'
+                    : '5. Verified Amenities & Logistics'}
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {AMENITY_OPTIONS.map((am) => {
+                    const checked = selectedAmenities.includes(am.id);
+                    return (
+                      <button
+                        key={am.id}
+                        type="button"
+                        onClick={() => handleToggleAmenity(am.id)}
+                        className={`p-2 rounded-xl border text-left text-xs transition-all flex items-center justify-between ${
+                          checked
+                            ? 'border-emerald-500 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 font-bold'
+                            : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-500'
+                        }`}>
+                        <span>{language === 'hi' ? am.labelHi : am.labelEn}</span>
+                        {checked && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 ml-1" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Submit Action */}
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={closeAddShelterModal}
+                  className="flex-1 py-3 px-4 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                  {language === 'hi' ? 'रद्द करें' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-[2] py-3 px-4 rounded-xl bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 hover:from-teal-700 hover:to-emerald-800 text-white font-bold text-xs shadow-lg shadow-teal-600/30 flex items-center justify-center space-x-2 transition-all hover:scale-[1.02] disabled:opacity-50">
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>{language === 'hi' ? 'पंजीकृत किया जा रहा है...' : 'Registering on GIS Mesh...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Building2 className="w-4 h-4" />
+                      <span>
+                        {language === 'hi'
+                          ? 'सुरक्षित आश्रय / हब पंजीकृत करें'
+                          : 'Register Safe Haven / Relocation Hub'}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
